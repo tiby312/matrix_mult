@@ -2,71 +2,109 @@
 
 extern crate rayon;
 
-pub struct MatrixOwn<T>{
-	pub rows:usize,
-	pub columns:usize,
-	pub values:Vec<T>
+
+pub trait NumTrait:Copy+Sized+std::ops::AddAssign+std::ops::SubAssign{
+
 }
 
-impl<T> MatrixOwn<T>{
-	pub fn from_ref(a:&MatrixRef<T>)->MatrixOwn<T>{
-		unimplemented!();
+use self::own::MatrixOwn;
+use self::own::MatrixRef;
+mod own{
+	use super::*;
+
+	#[repr(C)]
+	pub struct MatrixRef<T> {
+	    pub rows: usize,
+	    pub columns: usize,
+	    values: std::ptr::Unique<[T]>,
 	}
 
-	pub fn add_by(&mut self,a:&MatrixRef<T>){
-		unimplemented!();
+
+	impl<T:NumTrait> MatrixRef<T>{
+		pub fn get_values(&self)->&[T]{
+			unsafe{self.values.as_ref()}
+		}
+		pub fn get_values_mut(&mut self)->&mut [T]{
+			unsafe{self.values.as_mut()}
+		}
+
+		pub fn set_to(&mut self,other:&MatrixRef<T>){
+			for (a,b) in self.get_values_mut().iter_mut().zip(other.get_values().iter()){
+				*a=*b;
+			}
+		}
+		pub fn add_by(&mut self,other:&MatrixRef<T>){
+			for (a,b) in self.get_values_mut().iter_mut().zip(other.get_values().iter()){
+				*a+=*b;
+			}
+		}
+		pub fn sub_by(&mut self,other:&MatrixRef<T>){
+			for (a,b) in self.get_values_mut().iter_mut().zip(other.get_values().iter()){
+				*a-=*b;
+			}
+		}
+		pub fn split_into_four_mut<'b>(&'b mut self,point:[usize;2])->[[&'b mut MatrixRef<T>;2];2]{
+			unimplemented!();
+		}
+		pub fn split_into_four<'b>(&'b self,point:[usize;2])->[[&'b MatrixRef<T>;2];2]{
+			unimplemented!();
+		}
 	}
-	pub fn sub_by(&mut self,a:&MatrixRef<T>){
-		unimplemented!();
+
+
+
+	#[repr(C)]
+	pub struct MatrixOwn<T>{
+		pub rows:usize,
+		pub columns:usize,
+	    _dummy: std::ptr::Unique<[T]>,
+		values:Vec<T>
+	}
+
+
+	impl<T:Copy+NumTrait> MatrixOwn<T>{
+		pub fn from_ref(a:&MatrixRef<T>)->MatrixOwn<T>{
+			let mut values=Vec::new();
+			values.clone_from_slice(a.get_values());
+			let dummy=unsafe{std::ptr::Unique::new_unchecked(&mut values as &mut [T])};
+			MatrixOwn{rows:a.rows,columns:a.columns,values,_dummy:dummy}
+		}
+
+		pub fn add_by(&mut self,a:&MatrixRef<T>){
+			for (a,b) in self.values.iter_mut().zip(a.get_values()){
+				*a+=*b;
+			}
+		}
+		pub fn sub_by(&mut self,a:&MatrixRef<T>){
+			for (a,b) in self.values.iter_mut().zip(a.get_values()){
+				*a-=*b;
+			}	
+		}
+	}
+
+
+	impl<T> std::ops::DerefMut for MatrixOwn<T> {
+	    
+	    fn deref_mut(&mut self) -> &mut Self::Target {
+	        unsafe{std::mem::transmute(self)}
+	    }
+	}
+
+	impl<T> std::ops::Deref for MatrixOwn<T> {
+	    type Target = MatrixRef<T>;
+
+	    fn deref(&self) -> &MatrixRef<T> {
+	    	unsafe{std::mem::transmute(self)}
+	    }
 	}
 }
-impl<T> std::ops::DerefMut for MatrixOwn<T> {
-    
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        unimplemented!();
-    }
-}
-
-impl<T> std::ops::Deref for MatrixOwn<T> {
-    type Target = MatrixRef<T>;
-
-    fn deref(&self) -> &MatrixRef<T> {
-        unimplemented!();
-    }
-}
 
 
 
 
-pub struct MatrixRef<T> {
-    pub rows: usize,
-    pub columns: usize,
-    pub values: std::ptr::Unique<[T]>,
-}
 
 
-impl<T:Copy> MatrixRef<T>{
-	pub fn set_to(&mut self,other:&MatrixRef<T>){
-		unimplemented!()
-	}
-	pub fn add_by(&mut self,other:&MatrixRef<T>){
-		unimplemented!()
-	}
-	pub fn sub_by(&mut self,other:&MatrixRef<T>){
-		unimplemented!()
-	}
-	pub fn split_into_four_mut<'b>(&'b mut self,point:[usize;2])->[[&'b mut MatrixRef<T>;2];2]{
-		unimplemented!();
-	}
-	pub fn split_into_four<'b>(&'b self,point:[usize;2])->[[&'b MatrixRef<T>;2];2]{
-		unimplemented!();
-	}
-}
-
-
-
-
-pub fn mult<T:Copy+Send+Sync>(a:&mut MatrixRef<T>,b:&MatrixRef<T>){
+pub fn mult<T:Copy+Send+Sync+NumTrait>(a:&mut MatrixRef<T>,b:&MatrixRef<T>){
 
 	let midx=a.rows/2;
 
